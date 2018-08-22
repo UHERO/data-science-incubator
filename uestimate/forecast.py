@@ -20,6 +20,11 @@ WAITSTATUSES = ['Permit approved to issue',
  'BPA reviewed at counter', 'Called for pick-up']
 
 
+QUARTER_BEGINNINGS = pd.date_range(start=datetime(2008, 1, 1), periods=43, freq='3MS').date
+
+
+QUARTERS = [pd.date_range(start=QUARTER_BEGINNINGS[i], end=QUARTER_BEGINNINGS[i+1] - timedelta(days=1), freq='D').date for i in range(42)]
+
 class Forecast(object):
 
     def __init__(
@@ -27,13 +32,13 @@ class Forecast(object):
             dataframe,
             occupancyGroup,
             lowerValueLimit = 30000,
-            historyLen = 10
             ):
 
         self.data = dataframe[dataframe['permit.occupancyGroup'] == occupancyGroup]
         self.data = self.data[self.data['permit.estimatedValue'] > lowerValueLimit]
         self.data = self.data[self.data['permit.createdDate'] > datetime.now() - timedelta(days=365 * historyLen)]
-        self.data['quarter'] = self.data.apply(lambda row: row['permit.createdDate'].quarter, axis=1)
+        self.data['quarter'] = self.data.apply(lambda row: str(row['permit.createdDate'].year) + str(row['permit.createdDate'].quarter), axis=1)
+
 
     def getCurrentPending(self):
         return len(self.data[self.data['permit.status'] in WAITSTATUSES])
@@ -55,3 +60,11 @@ class Forecast(object):
     def getQuarterPendingValue(self, quarter):
         return sum([self.getDailyPendingValue(day) for day in quarter]) / float(len(quarter))
 
+    def getQPendings(self):
+        return [self.getQuarterPending(quarter) for quarter in self.quarters]
+
+    def getVPendings(self):
+        return [self.getQuarterPendingValue(quarter) for quarter in QUARTERS]
+
+    def getWaittime(self):
+        self.data.groupby(['quarter'])
