@@ -31,14 +31,16 @@ class Forecast(object):
             self,
             dataframe,
             occupancy_group,
-            lower_value_limit=30000,
+            regression_algorithm=None,
+            lower_value_limit=300000,
             start_date=datetime(2008, 1, 1)
     ):
 
         self.data = dataframe[dataframe['permit.occupancyGroup'] == occupancy_group]
         self.data = self.data[self.data['permit.estimatedValue'] > lower_value_limit]
-        self.data = self.data[self.data['permit.createdDate'] > start_date]
+        self.data = self.data[(self.data['permit.createdDate'] >= start_date) | (self.data['permit.issuedDate'] >= start_date)]
         self.data['quarter'] = self.data.apply(lambda row: str(row['permit.createdDate'].year) + str(row['permit.createdDate'].quarter), axis=1)
+        self.predictor = regression_algorithm()
 
     def get_current_pending(self):
         return sum(self.data['permit.status'].isin(WAITSTATUSES))
@@ -48,11 +50,14 @@ class Forecast(object):
 
     def _get_daily_pending(self, day):
         return len(self.data[((self.data['permit.createdDate'] <= day) & (self.data['permit.issuedDate'] >= day))
-                             | ((self.data['permit.createdDate'] <= day) & (self.data['permit.status'].isin(WAITSTATUSES)))])
+                                # | ((self.data['permit.createdDate'] <= day) & (self.data['permit.status'].isin(WAITSTATUSES)))
+                            ])
 
     def _get_daily_pending_value(self, day):
-        return sum(self.data[((self.data['permit.createdDate'] <= day) & (self.data['permit.issuedDate'] >= day))
-                             | ((self.data['permit.createdDate'] <= day) & (self.data['permit.status'].isin(WAITSTATUSES)))]['permit.estimatedValue'])
+        return sum(self.data[
+                       ((self.data['permit.createdDate'] <= day) & (self.data['permit.issuedDate'] >= day))
+                         # | ((self.data['permit.createdDate'] <= day) & (self.data['permit.status'].isin(WAITSTATUSES)))
+                            ]['permit.estimatedValue'])
 
     def _get_quarter_pending(self, quarter):
         return sum([self._get_daily_pending(day) for day in quarter]) / float(len(quarter))
@@ -66,13 +71,23 @@ class Forecast(object):
     def get_quarterly_pending_value(self, quarters):
         return pd.Series([self._get_quarter_pending_value(quarter) for quarter in quarters])
 
-    def get_wait_time(self):
+    def get_quarterly_wait_time(self):
         return self.data.groupby(['quarter'])['waitTime'].mean().values
 
+    def get_wait_time(self):
+        return self.data['waitTime'].mean()
+
+    def train_predictor(self):
+        self.predictor.fit(self.data[not self.data['permit.issuedDate'].isna()]['permit.estimatedValue'],
+                           self.data[not self.data['permit.issuedDate'].isna()]['waitTime'])
+
+    def expected_date_fill(self, row):
+        return row['permit.issuedDate'] if row['permit.issuedDate'] == row['permit.issuedDate'] else \
+            row['permit.createdDate'] + timedelta(days=self.predictor.predict(row['permit.estimatedValue']))
+
     def _forecast_approval_dates(self):
-        avg_wait = sum(self.get_wait_time()[-5:]) / 5
-        print(avg_wait)
-        self.data['expectedIssuedDate'] = self.data.apply(lambda row: row['permit.issuedDate'] if row['permit.issuedDate'] == row['permit.issuedDate'] else row['permit.createdDate'] + timedelta(days=avg_wait), axis=1)
+        self.train_predictor()
+        self.data['expectedIssuedDate'] = self.data.apply(self.expected_date_fill, axis=1)
 
     def predict_number(self, start, end):
         self._forecast_approval_dates()
@@ -89,6 +104,6 @@ class Forecast(object):
 if __name__ == '__main__':
     import preprocessPermitData as prep
 
-    df = prep.read_permits('300kPermits.csv')
+    df = prep.read_permits('currentPermits.csv')
     test = Forecast(df, occupancy_group='03 - Apartment')
     print(test.get_current_pending())
