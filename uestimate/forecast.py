@@ -1,5 +1,6 @@
 import pandas as pd
 import numpy as np
+from sklearn.ensemble import RandomForestRegressor
 from datetime import datetime, timedelta
 
 WAITSTATUSES = ['Permit approved to issue',
@@ -32,7 +33,7 @@ class Forecast(object):
             dataframe,
             occupancy_group,
             regression_algorithm=None,
-            lower_value_limit=300000,
+            lower_value_limit=3000,
             start_date=datetime(2008, 1, 1)
     ):
 
@@ -78,12 +79,12 @@ class Forecast(object):
         return self.data['waitTime'].mean()
 
     def train_predictor(self):
-        self.predictor.fit(self.data[not self.data['permit.issuedDate'].isna()]['permit.estimatedValue'],
-                           self.data[not self.data['permit.issuedDate'].isna()]['waitTime'])
+        self.predictor.fit(X=np.array(self.data[self.data['permit.issuedDate'].notnull()]['permit.estimatedValue']).reshape(-1, 1),
+                           y=np.array(self.data[self.data['permit.issuedDate'].notnull()]['waitTime']))
 
     def expected_date_fill(self, row):
         return row['permit.issuedDate'] if row['permit.issuedDate'] == row['permit.issuedDate'] else \
-            row['permit.createdDate'] + timedelta(days=self.predictor.predict(row['permit.estimatedValue']))
+            row['permit.createdDate'] + timedelta(days=self.predictor.predict(row['permit.estimatedValue'])[0])
 
     def _forecast_approval_dates(self):
         self.train_predictor()
@@ -105,5 +106,7 @@ if __name__ == '__main__':
     import preprocessPermitData as prep
 
     df = prep.read_permits('currentPermits.csv')
-    test = Forecast(df, occupancy_group='03 - Apartment')
-    print(test.get_current_pending())
+    test = Forecast(df, occupancy_group='03 - Apartment', regression_algorithm=RandomForestRegressor)
+    test._forecast_approval_dates()
+    test.data
+
