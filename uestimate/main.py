@@ -1,13 +1,14 @@
 import preprocessPermitData as prep
 import forecast
+from sklearn.ensemble import RandomForestRegressor
 import pandas as pd
 from datetime import datetime, timedelta
 
 
-OCCUPANCY_GROUPS = [('01 - Single Family', 50000),
-                    ('02 - Two Family', 50000),
-                    ('03 - Apartment', 200000),
-                    ('04 - Hotel', 200000)]
+OCCUPANCY_GROUPS = [('01 - Single Family', 2000),
+                    ('02 - Two Family', 2000),
+                    ('03 - Apartment', 20000),
+                    ('04 - Hotel', 20000)]
 
 QUARTER_BEGINNINGS = pd.date_range(start=datetime(2008, 1, 1), periods=44, freq='3MS').date
 
@@ -25,7 +26,7 @@ df = prep.read_permits('currentPermits.csv')
 
 writer = pd.ExcelWriter(datetime.now().strftime('%d %m %y') + 'forecast.xls', datetime_format='mmm d yyyy')
 for occupancy in OCCUPANCY_GROUPS:
-    predictor = forecast.Forecast(df, occupancy_group=occupancy[0], lower_value_limit=occupancy[1])
+    predictor = forecast.Forecast(df, occupancy_group=occupancy[0], lower_value_limit=occupancy[1], regression_algorithm=RandomForestRegressor)
     current_data = pd.DataFrame(data={'numberPending': predictor.get_quarterly_pending(quarters=QUARTERS),
                                       'valuePending': predictor.get_quarterly_pending_value(quarters=QUARTERS),
                                       'waitTime': predictor.get_wait_time(),
