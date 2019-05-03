@@ -22,6 +22,58 @@ WAITSTATUSES = ['Permit approved to issue',
 
 QUARTER_BEGINNINGS = pd.date_range(start=datetime(2008, 1, 1), periods=43, freq='3MS').date
 
+FEATURES = ['permit.estimatedValue',
+            'permit.buildingInspectionRequired',
+            'permit.certifOfOccupancyNeeded',
+            'permit.cityProject',
+            'permit.commercialOrResidential',
+            'permit.curbingTypes',
+            'permit.developmentPlanAreas',
+            'permit.drivewayExisting',
+            'permit.drivewayNew',
+            'permit.drivewayPrivate',
+            'permit.drivewayRepair',
+            'permit.drivewayTypes',
+            'permit.electricalInspectionRequired',
+            'permit.floodHazardComplied',
+            'permit.floodHazardDistrict',
+            'permit.floodZones',
+            'permit.heightLimit',
+            'permit.locationPermitCreated',
+            'permit.occupancyCommercial',
+            'permit.occupancyGroupCategory',
+            'permit.ownership',
+            'permit.proposedUse',
+            'permit.stateLandUse',
+            'permit.workAC',
+            'permit.workADU',
+            'permit.workAddition',
+            'permit.workAlteration',
+            'permit.workAntenna',
+            'permit.workDemolition',
+            'permit.workEVCharger',
+            'permit.workElectrical',
+            'permit.workElectricalMeter',
+            'permit.workFence',
+            'permit.workFireAlarm',
+            'permit.workFireSprinkler',
+            'permit.workFoundationOnly',
+            'permit.workHeatPump',
+            'permit.workNewBuilding',
+            'permit.workOhana',
+            'permit.workPVInstallWBattery',
+            'permit.workPlumbing',
+            'permit.workPool',
+            'permit.workRelocationFrom',
+            'permit.workRelocationTo',
+            'permit.workRepair',
+            'permit.workRetainingWall',
+            'permit.workShellOnly',
+            'permit.workSolar',
+            'permit.workSolarPVInstall',
+            'permit.workTemporary',
+            'permit.zoning']
+
 
 QUARTERS = [pd.date_range(start=QUARTER_BEGINNINGS[i], end=QUARTER_BEGINNINGS[i+1] - timedelta(days=1), freq='D').to_pydatetime() for i in range(42)]
 
@@ -42,6 +94,7 @@ class Forecast(object):
         self.data = self.data[(self.data['permit.createdDate'] >= start_date) | (self.data['permit.issuedDate'] >= start_date)]
         self.data['quarter'] = self.data.apply(lambda row: str(row['permit.createdDate'].year) + str(row['permit.createdDate'].quarter), axis=1)
         self.predictor = regression_algorithm()
+        self.features = FEATURES
 
     def get_current_pending(self):
         return sum(self.data['permit.status'].isin(WAITSTATUSES))
@@ -79,12 +132,12 @@ class Forecast(object):
         return self.data['waitTime'].mean()
 
     def train_predictor(self):
-        self.predictor.fit(X=np.array(self.data[self.data['permit.issuedDate'].notnull()]['permit.estimatedValue']).reshape(-1, 1),
+        self.predictor.fit(X=np.array(self.data[self.data['permit.issuedDate'].notnull()][self.features]).reshape(-1, 1),
                            y=np.array(self.data[self.data['permit.issuedDate'].notnull()]['waitTime']))
 
     def expected_date_fill(self, row):
         return row['permit.issuedDate'] if row['permit.issuedDate'] == row['permit.issuedDate'] else \
-            row['permit.createdDate'] + timedelta(days=self.predictor.predict(row['permit.estimatedValue'])[0])
+            row['permit.createdDate'] + timedelta(days=self.predictor.predict(row[self.features])[0])
 
     def _forecast_approval_dates(self):
         self.train_predictor()
@@ -104,8 +157,12 @@ class Forecast(object):
 
 if __name__ == '__main__':
     import preprocessPermitData as prep
+    import permitImport
+
+    permitImport.get_csv('currentPermits.csv')
 
     df = prep.read_permits('currentPermits.csv')
+    
     test = Forecast(df, occupancy_group='03 - Apartment', regression_algorithm=RandomForestRegressor)
     test._forecast_approval_dates()
     test.data

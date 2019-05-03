@@ -2,17 +2,23 @@ from pymongo import MongoClient
 import os
 import pandas as pd
 
-uri = 'mongodb://' + os.environ['MONGO_URL']
+def get_csv(filename):
+    uri = 'mongodb://' + os.environ['MONGO_URL']
 
-client = MongoClient(uri, username=os.environ['MONGO_USER'], password=os.environ['MONGO_PASS'], authSource='admin')
-db = client['HonoluluProperty']
+    client = MongoClient(uri, username=os.environ['MONGO_USER'], password=os.environ['MONGO_PASS'], authSource='admin')
+    db = client['HonoluluProperty']
 
-cursor = db['permits'].find({})
+    cursor = db['permits'].find({})
 
-permits = list(cursor)
+    permits = list(cursor)
 
-df = pd.io.json.json_normalize(permits)
+    df = pd.io.json.json_normalize(permits)
 
-df.to_csv('currentPermits.csv')
+    df.to_csv(filename)
 
-print('Import is done!')
+    print('Import is done!')
+
+
+if __name__ == '__main__':
+
+    get_csv('currentPermits.csv')
