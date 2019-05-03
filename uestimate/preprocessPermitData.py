@@ -1,6 +1,6 @@
 import pandas as pd
 import numpy as np
-from datetime import datetime, date
+from datetime import datetime
 
 NUMERIC_FEATURES = ['permit.acceptedValue',
                     'permit.estimatedValue',

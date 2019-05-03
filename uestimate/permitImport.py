@@ -14,3 +14,5 @@ permits = list(cursor)
 df = pd.io.json.json_normalize(permits)
 
 df.to_csv('currentPermits.csv')
+
+print('Import is done!')
